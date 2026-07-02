@@ -59,14 +59,16 @@ export class UserService {
       ];
     }
 
-    const limit = Number(query.limit) || 20;
-    const offset = Number(query.offset) || 0;
+    const limit = query.limit ?? 20;
+    const offset = query.offset ?? 0;
+    const sortBy = query.sortBy ?? 'createdAt';
+    const sortOrder = query.sortOrder ?? 'desc';
 
     const [data, total] = await Promise.all([
       this.prisma.user.findMany({
         where,
         select: this.userSelect,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [sortBy]: sortOrder },
         take: limit,
         skip: offset,
       }),

@@ -16,10 +16,16 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     @Inject(authConfig.KEY)
     authCfg: ConfigType<typeof authConfig>,
   ) {
+    // A1 FIX: Fail fast if secret is missing
+    const secret = authCfg.jwtAccessSecret;
+    if (!secret) {
+      throw new Error('JWT_ACCESS_SECRET environment variable is required');
+    }
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: authCfg.jwtAccessSecret ?? 'fallback-secret',
+      secretOrKey: secret,
     });
   }
 

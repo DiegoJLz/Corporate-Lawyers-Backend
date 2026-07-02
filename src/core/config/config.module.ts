@@ -1,17 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import appConfig from './app.config';
-import authConfig from './auth.config';
-import storageConfig from './storage.config';
-import mailConfig from './mail.config';
 
+// M1 FIX: ConfigModule.forRoot() is called in AppModule.
+// This module just re-exports ConfigModule for use within CoreModule.
 @Module({
-  imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: '.env',
-      load: [appConfig, authConfig, storageConfig, mailConfig],
-    }),
-  ],
+  imports: [ConfigModule],
+  exports: [ConfigModule],
 })
 export class AppConfigModule {}

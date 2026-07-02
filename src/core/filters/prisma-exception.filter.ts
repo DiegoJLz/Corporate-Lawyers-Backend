@@ -57,10 +57,13 @@ export class PrismaExceptionFilter implements ExceptionFilter {
         statusCode,
         error: HttpStatus[statusCode]?.toString().replace(/_/g, ' ') || 'Database Error',
         message,
-        details: {
-          code: exception.code,
-          meta: exception.meta,
-        },
+        // A4 FIX: Only expose Prisma meta in development
+        ...(process.env.NODE_ENV === 'development' && {
+          details: {
+            code: exception.code,
+            meta: exception.meta,
+          },
+        }),
       },
       meta: {
         timestamp: new Date().toISOString(),

@@ -36,7 +36,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   async login(@Body() dto: LoginDto, @Req() req: Request) {
-    return this.authService.login(dto, req.ip, req.get('user-agent'));
+    const ip = Array.isArray(req.ip) ? req.ip[0] : req.ip;
+    return this.authService.login(dto, ip, req.headers['user-agent'] as string);
   }
 
   @Public()
@@ -51,8 +52,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Logout current session' })
-  async logout(@Body() dto: RefreshTokenDto) {
-    return this.authService.logout(dto.refreshToken);
+  async logout(
+    @Body() dto: RefreshTokenDto,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.authService.logout(dto.refreshToken, userId);
   }
 
   @Post('logout-all')

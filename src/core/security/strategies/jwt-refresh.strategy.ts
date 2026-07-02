@@ -17,10 +17,16 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     @Inject(authConfig.KEY)
     authCfg: ConfigType<typeof authConfig>,
   ) {
+    // A1 FIX: Fail fast if secret is missing
+    const secret = authCfg.jwtRefreshSecret;
+    if (!secret) {
+      throw new Error('JWT_REFRESH_SECRET environment variable is required');
+    }
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: authCfg.jwtRefreshSecret ?? 'fallback-refresh-secret',
+      secretOrKey: secret,
       passReqToCallback: true,
     } as any);
   }

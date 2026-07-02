@@ -1,21 +1,32 @@
 import { Global, Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './database/prisma.module';
-import { PrismaService } from './database/prisma.service';
 import { AppConfigModule } from './config/config.module';
 import { JwtStrategy } from './security/strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './security/strategies/jwt-refresh.strategy';
 import { JwtAuthGuard } from './security/guards/jwt-auth.guard';
 import { RolesGuard } from './security/guards/roles.guard';
 import { ThrottlerBehindProxyGuard } from './security/guards/throttler-behind-proxy.guard';
+import { AllExceptionsFilter } from './filters/all-exceptions.filter';
+import { PrismaExceptionFilter } from './filters/prisma-exception.filter';
 
 @Global()
 @Module({
   imports: [PrismaModule, AppConfigModule],
   providers: [
-    PrismaService,
     JwtStrategy,
     JwtRefreshStrategy,
+    // Filters — PrismaExceptionFilter registered first so it catches Prisma errors
+    // before AllExceptionsFilter (NestJS evaluates in reverse registration order)
+    {
+      provide: APP_FILTER,
+      useClass: AllExceptionsFilter,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: PrismaExceptionFilter,
+    },
+    // Guards
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
@@ -29,6 +40,6 @@ import { ThrottlerBehindProxyGuard } from './security/guards/throttler-behind-pr
       useClass: ThrottlerBehindProxyGuard,
     },
   ],
-  exports: [PrismaService],
+  exports: [PrismaModule],
 })
 export class CoreModule {}

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { createHash } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import * as OTPAuth from 'otpauth';
 import * as QRCode from 'qrcode';
@@ -46,6 +47,7 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, this.authCfg.bcryptRounds);
 
+    // C3 FIX: Always force CLIENT role on public registration
     const user = await this.prisma.user.create({
       data: {
         email: dto.email.toLowerCase(),
@@ -53,7 +55,7 @@ export class AuthService {
         firstName: dto.firstName,
         lastName: dto.lastName,
         phone: dto.phone,
-        role: dto.role ?? UserRole.CLIENT,
+        role: UserRole.CLIENT,
         status: UserStatus.ACTIVE,
       },
     });
@@ -105,7 +107,7 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
 
     if (!isPasswordValid) {
-      await this.handleFailedLogin(user.id);
+      await this.handleFailedLogin(user.id, ip, userAgent);
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -157,8 +159,11 @@ export class AuthService {
   }
 
   async refreshTokens(refreshToken: string) {
+    // A2 FIX: Look up session by hashed refresh token
+    const tokenHash = this.hashToken(refreshToken);
+
     const session = await this.prisma.session.findUnique({
-      where: { refreshToken },
+      where: { refreshToken: tokenHash },
       include: { user: true },
     });
 
@@ -183,11 +188,23 @@ export class AuthService {
     return tokens;
   }
 
-  async logout(refreshToken: string) {
+  async logout(refreshToken: string, userId?: string) {
+    const tokenHash = this.hashToken(refreshToken);
+
     await this.prisma.session.updateMany({
-      where: { refreshToken },
+      where: { refreshToken: tokenHash },
       data: { isRevoked: true },
     });
+
+    // M4 FIX: Audit individual logout
+    if (userId) {
+      await this.auditService.log({
+        userId,
+        action: 'LOGOUT',
+        entityType: 'User',
+        entityId: userId,
+      });
+    }
   }
 
   async logoutAll(userId: string) {
@@ -226,7 +243,6 @@ export class AuthService {
       secret,
     });
 
-    // Store secret temporarily (will be confirmed on verify)
     await this.prisma.user.update({
       where: { id: userId },
       data: { twoFactorSecret: secret.base32 },
@@ -361,25 +377,26 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(newPassword, this.authCfg.bcryptRounds);
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: resetToken.userId },
-        data: {
-          passwordHash,
-          failedLoginAttempts: 0,
-          lockedUntil: null,
-        },
-      }),
-      this.prisma.passwordResetToken.update({
-        where: { id: resetToken.id },
-        data: { usedAt: new Date() },
-      }),
-      // Revoke all sessions on password reset
-      this.prisma.session.updateMany({
-        where: { userId: resetToken.userId },
-        data: { isRevoked: true },
-      }),
-    ]);
+    // Use sequential operations instead of $transaction array (compatible with extended client)
+    await this.prisma.user.update({
+      where: { id: resetToken.userId },
+      data: {
+        passwordHash,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      },
+    });
+
+    await this.prisma.passwordResetToken.update({
+      where: { id: resetToken.id },
+      data: { usedAt: new Date() },
+    });
+
+    // Revoke all sessions on password reset
+    await this.prisma.session.updateMany({
+      where: { userId: resetToken.userId },
+      data: { isRevoked: true },
+    });
 
     await this.auditService.log({
       userId: resetToken.userId,
@@ -416,14 +433,16 @@ export class AuthService {
     ip?: string,
     userAgent?: string,
   ) {
-    // Parse refresh token expiration
     const decoded = this.jwtService.decode(refreshToken) as { exp: number };
     const expiresAt = new Date(decoded.exp * 1000);
+
+    // A2 FIX: Store hashed refresh token
+    const tokenHash = this.hashToken(refreshToken);
 
     await this.prisma.session.create({
       data: {
         userId,
-        refreshToken,
+        refreshToken: tokenHash,
         ipAddress: ip,
         userAgent,
         expiresAt,
@@ -431,7 +450,17 @@ export class AuthService {
     });
   }
 
-  private async handleFailedLogin(userId: string) {
+  private async handleFailedLogin(userId: string, ip?: string, userAgent?: string) {
+    // M4 FIX: Audit failed login attempts
+    await this.auditService.log({
+      userId,
+      action: 'LOGIN_FAILED',
+      entityType: 'User',
+      entityId: userId,
+      ipAddress: ip,
+      userAgent,
+    });
+
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -468,5 +497,10 @@ export class AuthService {
 
     const delta = totp.validate({ token: code, window: 1 });
     return delta !== null;
+  }
+
+  // A2: Hash tokens with SHA-256 before storing
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 }
