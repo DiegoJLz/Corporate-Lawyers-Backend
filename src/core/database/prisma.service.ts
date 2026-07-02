@@ -75,8 +75,12 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get auditLog() { return this.client.auditLog; }
 
   // Expose $transaction for multi-operation atomicity
-  $transaction<T>(fn: Parameters<ExtendedPrismaClient['$transaction']>[0]): Promise<T> {
-    return (this.client.$transaction as any)(fn);
+  // Supports interactive transactions with isolation level
+  $transaction<T>(
+    fn: (tx: any) => Promise<T>,
+    options?: { isolationLevel?: string },
+  ): Promise<T> {
+    return (this.client.$transaction as any)(fn, options);
   }
 
   // Expose $queryRaw for raw SQL queries

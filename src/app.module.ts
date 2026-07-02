@@ -4,8 +4,15 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import * as Joi from 'joi';
 import { CoreModule } from './core/core.module';
 import { AuditModule } from './services/audit/audit.module';
+import { NotificationModule } from './services/notification/notification.module';
+import { SearchModule } from './services/search/search.module';
+import { StorageModule } from './services/storage/storage.module';
+import { QueueModule } from './services/queue/queue.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
+import { CaseModule } from './modules/case/case.module';
+import { DocumentModule } from './modules/document/document.module';
+import { CalendarModule } from './modules/calendar/calendar.module';
 import appConfig from './core/config/app.config';
 import authConfig from './core/config/auth.config';
 import storageConfig from './core/config/storage.config';
@@ -13,12 +20,11 @@ import mailConfig from './core/config/mail.config';
 
 @Module({
   imports: [
-    // Configuration — single forRoot, all configs loaded here
+    // Configuration
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, authConfig, storageConfig, mailConfig],
       envFilePath: '.env',
-      // B1 FIX: Validate required env vars on startup
       validationSchema: Joi.object({
         NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
         PORT: Joi.number().default(3000),
@@ -29,13 +35,12 @@ import mailConfig from './core/config/mail.config';
         JWT_REFRESH_EXPIRATION: Joi.string().default('7d'),
         BCRYPT_ROUNDS: Joi.number().default(12),
         CORS_ORIGINS: Joi.string().default('http://localhost:3001'),
+        REDIS_HOST: Joi.string().default('localhost'),
+        REDIS_PORT: Joi.number().default(6379),
         THROTTLE_TTL: Joi.number().default(60000),
         THROTTLE_LIMIT: Joi.number().default(60),
       }),
-      validationOptions: {
-        allowUnknown: true,
-        abortEarly: false,
-      },
+      validationOptions: { allowUnknown: true, abortEarly: false },
     }),
 
     // Rate Limiting
@@ -46,13 +51,22 @@ import mailConfig from './core/config/mail.config';
       },
     ]),
 
-    // Core
+    // Core & Transversal
     CoreModule,
     AuditModule,
+    NotificationModule,
+    QueueModule,
+    StorageModule,
+    SearchModule,
 
-    // Feature Modules
+    // Feature Modules — Phase 1
     AuthModule,
     UserModule,
+
+    // Feature Modules — Phase 2
+    CaseModule,
+    DocumentModule,
+    CalendarModule,
   ],
 })
 export class AppModule {}
