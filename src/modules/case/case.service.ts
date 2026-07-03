@@ -161,8 +161,18 @@ export class CaseService {
       if (query.dateTo) where.startDate.lte = new Date(query.dateTo);
     }
 
-    // Non-admin users only see their assigned cases
-    if (userRole !== UserRole.SUPER_ADMIN && userRole !== UserRole.ADMIN) {
+    // A2 FIX: Role-based case visibility
+    if (userRole === UserRole.CLIENT) {
+      const clientProfile = await this.prisma.clientProfile.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      if (clientProfile) {
+        where.clientProfileId = clientProfile.id;
+      } else {
+        return { data: [], meta: { total: 0, limit: query.limit ?? 20, offset: query.offset ?? 0, hasNextPage: false, hasPreviousPage: false } };
+      }
+    } else if (userRole !== UserRole.SUPER_ADMIN && userRole !== UserRole.ADMIN) {
       where.assignments = {
         ...where.assignments as any,
         some: { userId, removedAt: null },
@@ -600,6 +610,22 @@ export class CaseService {
   async assertCaseAccess(caseId: string, userId: string, userRole: string, requiredAssignmentRole?: CaseAssignmentRole) {
     if (userRole === UserRole.SUPER_ADMIN || userRole === UserRole.ADMIN) return;
 
+    // A1 FIX: CLIENT verifies via clientProfile, not caseAssignment
+    if (userRole === UserRole.CLIENT) {
+      const clientProfile = await this.prisma.clientProfile.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      if (!clientProfile) throw new ForbiddenException('Client profile not found');
+
+      const caseRecord = await this.prisma.case.findFirst({
+        where: { id: caseId, clientProfileId: clientProfile.id, deletedAt: null },
+      });
+      if (!caseRecord) throw new ForbiddenException('You do not have access to this case');
+      return;
+    }
+
+    // LAWYER/ASSISTANT: verify caseAssignment
     const assignment = await this.prisma.caseAssignment.findFirst({
       where: { caseId, userId, removedAt: null },
     });

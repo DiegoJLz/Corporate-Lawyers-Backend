@@ -16,6 +16,8 @@ import { CalendarModule } from './modules/calendar/calendar.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { CrmModule } from './modules/crm/crm.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
+import { NotificationRestModule } from './modules/notifications/notification.module';
+import { ClientPortalModule } from './modules/client-portal/client-portal.module';
 import appConfig from './core/config/app.config';
 import authConfig from './core/config/auth.config';
 import storageConfig from './core/config/storage.config';
@@ -75,6 +77,10 @@ import mailConfig from './core/config/mail.config';
     BillingModule,
     CrmModule,
     MessagingModule,
+
+    // Feature Modules — Phase 4
+    NotificationRestModule,
+    ClientPortalModule,
   ],
 })
 export class AppModule {}
