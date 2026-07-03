@@ -13,6 +13,9 @@ import { UserModule } from './modules/user/user.module';
 import { CaseModule } from './modules/case/case.module';
 import { DocumentModule } from './modules/document/document.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
+import { BillingModule } from './modules/billing/billing.module';
+import { CrmModule } from './modules/crm/crm.module';
+import { MessagingModule } from './modules/messaging/messaging.module';
 import appConfig from './core/config/app.config';
 import authConfig from './core/config/auth.config';
 import storageConfig from './core/config/storage.config';
@@ -67,6 +70,11 @@ import mailConfig from './core/config/mail.config';
     CaseModule,
     DocumentModule,
     CalendarModule,
+
+    // Feature Modules — Phase 3
+    BillingModule,
+    CrmModule,
+    MessagingModule,
   ],
 })
 export class AppModule {}

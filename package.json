@@ -121,6 +121,9 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
+    "transformIgnorePatterns": [
+      "node_modules/(?!uuid)"
+    ],
     "moduleNameMapper": {
       "^@common/(.*)$": "<rootDir>/common/$1",
       "^@core/(.*)$": "<rootDir>/core/$1",
