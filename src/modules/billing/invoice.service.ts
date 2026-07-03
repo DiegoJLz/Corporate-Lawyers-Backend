@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../core/database/prisma.service';
 import { AuditService } from '../../services/audit/audit.service';
 import { NotificationService } from '../../services/notification/notification.service';
@@ -154,7 +154,16 @@ export class InvoiceService {
     const where: Prisma.InvoiceWhereInput = {};
     const isAdmin = userRole === UserRole.SUPER_ADMIN || userRole === UserRole.ADMIN;
 
-    if (!isAdmin) {
+    // A3 FIX: CLIENT sees own invoices (no DRAFT); LAWYER sees assigned cases
+    if (userRole === UserRole.CLIENT) {
+      const cp = await this.prisma.clientProfile.findUnique({ where: { userId }, select: { id: true } });
+      if (cp) {
+        where.clientProfileId = cp.id;
+        where.status = { not: InvoiceStatus.DRAFT };
+      } else {
+        return { data: [], meta: { total: 0, limit: query.limit ?? 20, offset: query.offset ?? 0, hasNextPage: false, hasPreviousPage: false } };
+      }
+    } else if (!isAdmin) {
       where.case = { assignments: { some: { userId, removedAt: null } } };
     }
     if (query.caseId) where.caseId = query.caseId;
@@ -189,11 +198,11 @@ export class InvoiceService {
     return { data, meta: { total, limit, offset, hasNextPage: offset + limit < total, hasPreviousPage: offset > 0 } };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId?: string, userRole?: string) {
     const invoice = await this.prisma.invoice.findFirst({
       where: { id },
       include: {
-        case: { select: { id: true, caseNumber: true, title: true } },
+        case: { select: { id: true, caseNumber: true, title: true, clientProfileId: true } },
         items: true,
         payments: { orderBy: { paidAt: 'desc' } },
         timeEntries: { select: { id: true, description: true, hours: true, rate: true, date: true } },
@@ -201,11 +210,30 @@ export class InvoiceService {
       },
     });
     if (!invoice) throw new NotFoundException(`Invoice ${id} not found`);
+
+    // A4 FIX: Access control
+    if (userId && userRole) {
+      if (userRole === UserRole.CLIENT) {
+        const cp = await this.prisma.clientProfile.findUnique({ where: { userId }, select: { id: true } });
+        if (!cp || invoice.clientProfileId !== cp.id) throw new ForbiddenException('No access to this invoice');
+        if (invoice.status === InvoiceStatus.DRAFT) throw new ForbiddenException('No access to this invoice');
+      } else if (userRole !== UserRole.SUPER_ADMIN && userRole !== UserRole.ADMIN) {
+        const assignment = await this.prisma.caseAssignment.findFirst({
+          where: { caseId: invoice.caseId, userId, removedAt: null },
+        });
+        if (!assignment) throw new ForbiddenException('No access to this invoice');
+      }
+    }
+
     return invoice;
   }
 
-  async update(id: string, dto: UpdateInvoiceDto, userId: string) {
-    const invoice = await this.findOne(id);
+  async update(id: string, dto: UpdateInvoiceDto, userId: string, userRole?: string) {
+    // A4 FIX: CLIENT cannot modify invoices
+    if (userRole === UserRole.CLIENT) {
+      throw new ForbiddenException('Clients cannot modify invoices');
+    }
+    const invoice = await this.findOne(id, userId, userRole);
 
     // Status transition
     if (dto.status && dto.status !== invoice.status) {

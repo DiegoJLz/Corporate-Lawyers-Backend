@@ -36,14 +36,23 @@ export class InvoiceController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get invoice by ID' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.findOne(id);
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.findOne(id, userId, role);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update invoice (status transitions, metadata)' })
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateInvoiceDto, @CurrentUser('userId') userId: string) {
-    return this.service.update(id, dto, userId);
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateInvoiceDto,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.update(id, dto, userId, role);
   }
 
   @Delete(':id')
