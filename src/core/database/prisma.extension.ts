@@ -6,6 +6,7 @@ export const SOFT_DELETE_MODELS = [
   'CaseNote',
   'Document',
   'TimeEntry',
+  'Expense',
   'Invoice',
   'Event',
 ] as const;
