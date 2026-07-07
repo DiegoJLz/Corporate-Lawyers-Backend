@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../../core/database/prisma.service';
 import { AuditService } from '../../services/audit/audit.service';
 import { ConflictCheckService } from './conflict-check.service';
+import { WebhookDispatcherService } from '../../modules/integrations/webhooks/webhook-dispatcher.service';
 import { CreateCaseDto } from './dto/create-case.dto';
 import { UpdateCaseDto } from './dto/update-case.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
@@ -40,6 +41,7 @@ export class CaseService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly conflictCheckService: ConflictCheckService,
+    private readonly webhookDispatcher: WebhookDispatcherService,
   ) {}
 
   // ─── CRUD ──────────────────────────────────────────────────────
@@ -118,6 +120,8 @@ export class CaseService {
       entityId: newCase.id,
       newValue: { caseNumber: newCase.caseNumber, title: dto.title },
     });
+
+    await this.webhookDispatcher.dispatch('case.created', { caseId: newCase.id, caseNumber: newCase.caseNumber, type: newCase.type, clientId: dto.clientProfileId });
 
     const caseData = await this.findOne(newCase.id);
 
@@ -319,6 +323,12 @@ export class CaseService {
       oldValue: { status: existing.status },
       newValue: { status: dto.status, reason: dto.reason },
     });
+
+    await this.webhookDispatcher.dispatch('case.status_changed', { caseId: id, caseNumber: existing.caseNumber, oldStatus: existing.status, newStatus: dto.status });
+
+    if (dto.status === CaseStatus.CLOSED) {
+      await this.webhookDispatcher.dispatch('case.closed', { caseId: id, caseNumber: existing.caseNumber, closeDate: new Date().toISOString() });
+    }
 
     return this.findOne(id);
   }

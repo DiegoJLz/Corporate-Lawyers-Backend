@@ -17,6 +17,7 @@ import {
   MAX_FILE_SIZE,
 } from '../../common/constants/app.constants';
 import { UploadedFile } from '../../common/interfaces/uploaded-file.interface';
+import { WebhookDispatcherService } from '../../modules/integrations/webhooks/webhook-dispatcher.service';
 
 @Injectable()
 export class DocumentService {
@@ -26,6 +27,7 @@ export class DocumentService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly storageService: StorageService,
+    private readonly webhookDispatcher: WebhookDispatcherService,
   ) {}
 
   // ─── Upload ──────────────────────────────────────────────────
@@ -74,6 +76,8 @@ export class DocumentService {
       entityType: 'Document',
       entityId: document.id,
     });
+
+    await this.webhookDispatcher.dispatch('document.uploaded', { documentId: document.id, title: dto.title, type: dto.type || 'OTHER', caseId: dto.caseId });
 
     return document;
   }

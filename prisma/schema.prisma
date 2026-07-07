@@ -828,3 +828,48 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+// ============================================================
+// WEBHOOKS
+// ============================================================
+
+model WebhookEndpoint {
+  id          String   @id @default(uuid())
+  url         String
+  secret      String
+  events      String[]
+  isActive    Boolean  @default(true) @map("is_active")
+  description String?
+  createdById String   @map("created_by_id")
+
+  deliveries WebhookDelivery[]
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([isActive])
+  @@index([deletedAt])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id         String  @id @default(uuid())
+  endpointId String  @map("endpoint_id")
+  event      String
+  payload    Json
+  statusCode Int?    @map("status_code")
+  response   String?
+  attempts   Int     @default(0)
+  success    Boolean @default(false)
+  lastError  String? @map("last_error")
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([endpointId])
+  @@index([event])
+  @@index([createdAt])
+  @@map("webhook_deliveries")
+}
