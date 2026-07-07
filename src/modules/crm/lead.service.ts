@@ -13,6 +13,7 @@ import { UpdateLeadDto } from './dto/update-lead.dto';
 import { LeadQueryDto } from './dto/lead-query.dto';
 import { AssignLeadDto } from './dto/assign-lead.dto';
 import { ConvertLeadDto } from './dto/convert-lead.dto';
+import { WebhookDispatcherService } from '../../modules/integrations/webhooks/webhook-dispatcher.service';
 import {
   Prisma,
   LeadStatus,
@@ -39,6 +40,7 @@ export class LeadService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly notificationService: NotificationService,
+    private readonly webhookDispatcher: WebhookDispatcherService,
   ) {}
 
   // ─── CRUD ──────────────────────────────────────────────────────
@@ -86,6 +88,8 @@ export class LeadService {
         newValue: { firstName: dto.firstName, lastName: dto.lastName, email: dto.email },
       });
     }
+
+    await this.webhookDispatcher.dispatch('lead.created', { leadId: lead.id, name: dto.firstName + ' ' + dto.lastName, email: dto.email, source: dto.source || 'WEBSITE' });
 
     return updated;
   }
@@ -347,6 +351,8 @@ export class LeadService {
       entityId: id,
       newValue: { newUserId: result.id, email: lead.email },
     });
+
+    await this.webhookDispatcher.dispatch('lead.converted', { leadId: id, userId: result.id });
 
     return this.findOne(id);
   }

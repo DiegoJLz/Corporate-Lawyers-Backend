@@ -8,6 +8,7 @@ import { DocumentService } from '../document.service';
 import { PrismaService } from '../../../core/database/prisma.service';
 import { AuditService } from '../../../services/audit/audit.service';
 import { StorageService } from '../../../services/storage/storage.service';
+import { WebhookDispatcherService } from '../../integrations/webhooks/webhook-dispatcher.service';
 import { UploadedFile } from '../../../common/interfaces/uploaded-file.interface';
 import {
   ALLOWED_MIME_TYPES,
@@ -120,6 +121,7 @@ describe('DocumentService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: AuditService, useValue: mockAuditService },
         { provide: StorageService, useValue: mockStorageService },
+        { provide: WebhookDispatcherService, useValue: { dispatch: jest.fn() } },
       ],
     }).compile();
 

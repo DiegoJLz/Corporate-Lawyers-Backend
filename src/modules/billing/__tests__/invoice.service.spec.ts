@@ -7,6 +7,7 @@ import { InvoiceService } from '../invoice.service';
 import { PrismaService } from '../../../core/database/prisma.service';
 import { AuditService } from '../../../services/audit/audit.service';
 import { NotificationService } from '../../../services/notification/notification.service';
+import { WebhookDispatcherService } from '../../integrations/webhooks/webhook-dispatcher.service';
 import { InvoiceStatus, UserRole } from '@prisma/client';
 
 // ─── Fixtures ───────────────────────────────────────────────────────
@@ -146,6 +147,7 @@ describe('InvoiceService', () => {
           provide: NotificationService,
           useValue: mockNotificationService,
         },
+        { provide: WebhookDispatcherService, useValue: { dispatch: jest.fn() } },
       ],
     }).compile();
 

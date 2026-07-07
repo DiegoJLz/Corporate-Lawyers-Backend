@@ -8,6 +8,7 @@ import { LeadService } from '../lead.service';
 import { PrismaService } from '../../../core/database/prisma.service';
 import { AuditService } from '../../../services/audit/audit.service';
 import { NotificationService } from '../../../services/notification/notification.service';
+import { WebhookDispatcherService } from '../../integrations/webhooks/webhook-dispatcher.service';
 import {
   LeadStatus,
   LeadSource,
@@ -140,6 +141,7 @@ describe('LeadService', () => {
           provide: NotificationService,
           useValue: mockNotificationService,
         },
+        { provide: WebhookDispatcherService, useValue: { dispatch: jest.fn() } },
       ],
     }).compile();
 

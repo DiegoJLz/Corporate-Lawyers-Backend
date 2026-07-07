@@ -9,6 +9,7 @@ import { AddInvoiceItemDto } from './dto/add-invoice-item.dto';
 import { Prisma, InvoiceStatus, UserRole } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { INVOICE_NUMBER_PREFIX } from '../../common/constants/app.constants';
+import { WebhookDispatcherService } from '../../modules/integrations/webhooks/webhook-dispatcher.service';
 
 const STATUS_TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
   DRAFT: [InvoiceStatus.SENT, InvoiceStatus.CANCELLED],
@@ -25,6 +26,7 @@ export class InvoiceService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly notificationService: NotificationService,
+    private readonly webhookDispatcher: WebhookDispatcherService,
   ) {}
 
   async create(dto: CreateInvoiceDto, userId: string) {
@@ -146,6 +148,8 @@ export class InvoiceService {
         newValue: { invoiceNumber, total },
       });
 
+      await this.webhookDispatcher.dispatch('invoice.created', { invoiceId: invoice.id, invoiceNumber, total: total.toNumber(), caseId: dto.caseId });
+
       return this.findOne(invoice.id);
     }, { isolationLevel: 'Serializable' });
   }
@@ -265,11 +269,15 @@ export class InvoiceService {
         await this.prisma.caseTimeline.create({
           data: { caseId: invoice.caseId, eventType: 'INVOICE_SENT', title: `Invoice ${invoice.invoiceNumber} sent`, isPublic: true },
         });
+
+        await this.webhookDispatcher.dispatch('invoice.sent', { invoiceId: id, invoiceNumber: invoice.invoiceNumber });
       }
 
       if (dto.status === InvoiceStatus.PAID) {
         dto = { ...dto } as any;
         (dto as any).paidAt = new Date();
+
+        await this.webhookDispatcher.dispatch('invoice.paid', { invoiceId: id, invoiceNumber: invoice.invoiceNumber, total: Number(invoice.total), paidAt: new Date().toISOString() });
       }
     }
 

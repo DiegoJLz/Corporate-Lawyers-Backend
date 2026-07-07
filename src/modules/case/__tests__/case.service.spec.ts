@@ -8,6 +8,7 @@ import { CaseService } from '../case.service';
 import { PrismaService } from '../../../core/database/prisma.service';
 import { AuditService } from '../../../services/audit/audit.service';
 import { ConflictCheckService } from '../conflict-check.service';
+import { WebhookDispatcherService } from '../../integrations/webhooks/webhook-dispatcher.service';
 import {
   CaseStatus,
   CaseAssignmentRole,
@@ -144,6 +145,7 @@ describe('CaseService', () => {
           provide: ConflictCheckService,
           useValue: mockConflictCheckService,
         },
+        { provide: WebhookDispatcherService, useValue: { dispatch: jest.fn() } },
       ],
     }).compile();
 

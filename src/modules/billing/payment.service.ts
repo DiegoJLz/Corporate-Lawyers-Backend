@@ -7,6 +7,7 @@ import { PaymentQueryDto } from './dto/payment-query.dto';
 import { Prisma, InvoiceStatus, PaymentStatus, CaseAssignmentRole, UserRole } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { v4 as uuidv4 } from 'uuid';
+import { WebhookDispatcherService } from '../../modules/integrations/webhooks/webhook-dispatcher.service';
 
 @Injectable()
 export class PaymentService {
@@ -14,6 +15,7 @@ export class PaymentService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly notificationService: NotificationService,
+    private readonly webhookDispatcher: WebhookDispatcherService,
   ) {}
 
   async create(dto: CreatePaymentDto, userId: string) {
@@ -107,6 +109,8 @@ export class PaymentService {
         userId, action: 'CREATE', entityType: 'Payment', entityId: payment.id,
         newValue: { amount: dto.amount, invoiceId: dto.invoiceId },
       });
+
+      await this.webhookDispatcher.dispatch('payment.received', { paymentId: payment.id, invoiceId: dto.invoiceId, amount: dto.amount, method: dto.method });
 
       return payment;
     }, { isolationLevel: 'Serializable' });

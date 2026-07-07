@@ -73,6 +73,8 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get clientMessage() { return this.client.clientMessage; }
   get notification() { return this.client.notification; }
   get auditLog() { return this.client.auditLog; }
+  get webhookEndpoint() { return this.client.webhookEndpoint; }
+  get webhookDelivery() { return this.client.webhookDelivery; }
 
   // Expose $transaction for multi-operation atomicity
   // Supports interactive transactions with isolation level
