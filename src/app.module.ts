@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import * as Joi from 'joi';
@@ -23,6 +23,12 @@ import { PdfModule } from './modules/integrations/pdf/pdf.module';
 import { CfdiModule } from './modules/integrations/cfdi/cfdi.module';
 import { SignatureModule } from './modules/integrations/signatures/signature.module';
 import { WebhookModule } from './modules/integrations/webhooks/webhook.module';
+import { LoggerModule } from './common/logger/logger.module';
+import { HealthModule } from './modules/health/health.module';
+import { AppCacheModule } from './common/cache/cache.module';
+import { SanitizeMiddleware } from './common/middleware/sanitize.middleware';
+import { RequestIdMiddleware } from './common/logger/logger.middleware';
+import { GracefulShutdownService } from './common/shutdown/graceful-shutdown.service';
 import appConfig from './core/config/app.config';
 import authConfig from './core/config/auth.config';
 import storageConfig from './core/config/storage.config';
@@ -89,6 +95,13 @@ import mailConfig from './core/config/mail.config';
         DOCUSIGN_API_KEY: Joi.string().allow('').default('')
           .when('SIGNATURE_PROVIDER', { is: 'docusign', then: Joi.string().required() }),
         SIGNATURE_WEBHOOK_SECRET: Joi.string().default('dev-webhook-secret'),
+        // Logging & Cache
+        LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'debug', 'verbose').default('info'),
+        CACHE_TTL: Joi.number().default(300),
+        CACHE_MAX: Joi.number().default(1000),
+        COOKIE_SECRET: Joi.string().default('dev-cookie-secret'),
+        SWAGGER_USER: Joi.string().default('admin'),
+        SWAGGER_PASS: Joi.string().default('changeme'),
         // Rate limiting & CORS
         CORS_ORIGINS: Joi.string().default('http://localhost:3001'),
         THROTTLE_TTL: Joi.number().default(60000),
@@ -108,6 +121,8 @@ import mailConfig from './core/config/mail.config';
     // Core & Transversal
     CoreModule,
     AuditModule,
+    LoggerModule,
+    AppCacheModule,
     NotificationModule,
     QueueModule,
     StorageModule,
@@ -137,6 +152,15 @@ import mailConfig from './core/config/mail.config';
     CfdiModule,
     SignatureModule,
     WebhookModule,
+
+    // Hardening — Phase 6
+    HealthModule,
   ],
+  providers: [GracefulShutdownService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+    consumer.apply(SanitizeMiddleware).forRoutes('*');
+  }
+}

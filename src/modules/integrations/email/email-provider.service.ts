@@ -1,10 +1,12 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { IEmailProvider, EmailMessage, EmailResult } from './providers/email-provider.interface';
 import { TemplateService } from './templates/template.service';
+import { CircuitBreaker } from '../../../common/resilience/circuit-breaker';
 
 @Injectable()
 export class EmailProviderService {
   private readonly logger = new Logger(EmailProviderService.name);
+  private circuitBreaker = new CircuitBreaker('email', { failureThreshold: 5, recoveryTimeoutMs: 60000 });
 
   constructor(
     @Inject('EMAIL_PROVIDER') private readonly provider: IEmailProvider,
@@ -14,7 +16,13 @@ export class EmailProviderService {
   async send(message: EmailMessage): Promise<EmailResult> {
     this.logger.log(`Sending email to ${Array.isArray(message.to) ? message.to.join(', ') : message.to} | Subject: ${message.subject}`);
 
-    const result = await this.provider.send(message);
+    const result = await this.circuitBreaker.execute(
+      () => this.provider.send(message),
+      async () => {
+        this.logger.warn('Email circuit breaker is open — returning fallback');
+        return { messageId: '', accepted: false, provider: 'circuit-open' } as EmailResult;
+      },
+    );
 
     if (result.accepted) {
       this.logger.log(`Email sent successfully via ${result.provider} (messageId: ${result.messageId})`);

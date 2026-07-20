@@ -9,6 +9,7 @@ import { PrismaService } from '../../../core/database/prisma.service';
 import { AuditService } from '../../../services/audit/audit.service';
 import { ConflictCheckService } from '../conflict-check.service';
 import { WebhookDispatcherService } from '../../integrations/webhooks/webhook-dispatcher.service';
+import { AppCacheService } from '../../../common/cache/cache.service';
 import {
   CaseStatus,
   CaseAssignmentRole,
@@ -146,6 +147,7 @@ describe('CaseService', () => {
           useValue: mockConflictCheckService,
         },
         { provide: WebhookDispatcherService, useValue: { dispatch: jest.fn() } },
+        { provide: AppCacheService, useValue: { get: jest.fn(), set: jest.fn(), del: jest.fn(), getOrSet: jest.fn((_k: string, fn: () => any) => fn()), invalidatePattern: jest.fn() } },
       ],
     }).compile();
 

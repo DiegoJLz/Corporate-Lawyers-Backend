@@ -38,6 +38,7 @@
     "@aws-sdk/client-s3": "^3.1078.0",
     "@aws-sdk/s3-request-presigner": "^3.1078.0",
     "@nestjs/bullmq": "^11.0.4",
+    "@nestjs/cache-manager": "^3.1.3",
     "@nestjs/common": "^11.1.27",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.27",
@@ -46,17 +47,21 @@
     "@nestjs/platform-express": "^11.1.27",
     "@nestjs/platform-socket.io": "^11.1.27",
     "@nestjs/swagger": "^11.4.5",
+    "@nestjs/terminus": "^11.1.1",
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/websockets": "^11.1.27",
     "@sendgrid/mail": "^8.1.6",
     "axios": "^1.18.1",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.79.2",
+    "cache-manager": "^7.2.9",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
     "handlebars": "^4.7.9",
     "helmet": "^8.2.0",
+    "ioredis": "^5.11.1",
     "joi": "^18.2.3",
     "multer": "^2.2.0",
     "nodemailer": "^9.0.3",
@@ -66,7 +71,9 @@
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "uuid": "^14.0.1"
+    "uuid": "^14.0.1",
+    "winston": "^3.19.0",
+    "xss": "^1.0.15"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -76,6 +83,7 @@
     "@nestjs/testing": "^11.1.27",
     "@prisma/client": "^5.22.0",
     "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.8.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
@@ -125,6 +133,14 @@
       "!main.ts"
     ],
     "coverageDirectory": "../coverage",
+    "coverageThreshold": {
+      "global": {
+        "branches": 70,
+        "functions": 80,
+        "lines": 80,
+        "statements": 80
+      }
+    },
     "testEnvironment": "node",
     "transformIgnorePatterns": [
       "node_modules/(?!uuid)"

@@ -8,10 +8,12 @@ import { CancelCfdiDto } from './dto/cancel-cfdi.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { Prisma, InvoiceStatus } from '@prisma/client';
 import { WebhookDispatcherService } from '../webhooks/webhook-dispatcher.service';
+import { CircuitBreaker } from '../../../common/resilience/circuit-breaker';
 
 @Injectable()
 export class CfdiService {
   private readonly logger = new Logger(CfdiService.name);
+  private circuitBreaker = new CircuitBreaker('cfdi', { failureThreshold: 5, recoveryTimeoutMs: 60000 });
 
   private readonly emisorRfc: string;
   private readonly emisorNombre: string;
@@ -94,7 +96,7 @@ export class CfdiService {
       folio: invoice.invoiceNumber.split('-').pop() ?? '00001',
     };
 
-    const result = await this.cfdiProvider.stamp(cfdiData);
+    const result = await this.circuitBreaker.execute(() => this.cfdiProvider.stamp(cfdiData));
 
     await this.prisma.invoice.update({
       where: { id: invoiceId },

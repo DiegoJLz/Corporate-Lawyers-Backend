@@ -1,12 +1,5 @@
-import {
-  Controller,
-  Post,
-  Body,
-  HttpCode,
-  HttpStatus,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
 import { AuthGuard } from '@nestjs/passport';
@@ -33,6 +26,7 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   async login(@Body() dto: LoginDto, @Req() req: Request) {
@@ -77,6 +71,7 @@ export class AuthController {
   }
 
   @Post('2fa/verify')
+  @Throttle({ default: { ttl: 60000, limit: 3 } })
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Verify and enable two-factor authentication' })
@@ -102,6 +97,7 @@ export class AuthController {
 
   @Public()
   @Post('forgot-password')
+  @Throttle({ default: { ttl: 60000, limit: 3 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -110,6 +106,7 @@ export class AuthController {
 
   @Public()
   @Post('reset-password')
+  @Throttle({ default: { ttl: 60000, limit: 3 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password with token' })
   async resetPassword(@Body() dto: ResetPasswordDto) {

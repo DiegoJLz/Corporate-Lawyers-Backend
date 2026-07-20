@@ -15,10 +15,12 @@ import { ISignatureProvider } from './providers/signature-provider.interface';
 import { CreateSignatureRequestDto } from './dto/create-signature-request.dto';
 import { SignatureQueryDto } from './dto/signature-query.dto';
 import { WebhookDispatcherService } from '../webhooks/webhook-dispatcher.service';
+import { CircuitBreaker } from '../../../common/resilience/circuit-breaker';
 
 @Injectable()
 export class SignatureService {
   private readonly logger = new Logger(SignatureService.name);
+  private circuitBreaker = new CircuitBreaker('signature', { failureThreshold: 5, recoveryTimeoutMs: 60000 });
 
   constructor(
     private readonly prisma: PrismaService,
@@ -60,17 +62,19 @@ export class SignatureService {
     );
     const callbackUrl = `${apiUrl}/api/v1/webhooks/signatures`;
 
-    const result = await this.signatureProvider.createRequest({
-      documentTitle: document.title,
-      documentUrl: presignedUrl,
-      signers: dto.signers.map((s) => ({
-        name: s.name,
-        email: s.email,
-        order: s.order,
-      })),
-      callbackUrl,
-      message: dto.message,
-    });
+    const result = await this.circuitBreaker.execute(() =>
+      this.signatureProvider.createRequest({
+        documentTitle: document.title,
+        documentUrl: presignedUrl,
+        signers: dto.signers.map((s) => ({
+          name: s.name,
+          email: s.email,
+          order: s.order,
+        })),
+        callbackUrl,
+        message: dto.message,
+      }),
+    );
 
     const signatures = await Promise.all(
       dto.signers.map((signer) =>

@@ -335,6 +335,7 @@ model Case {
   @@index([status])
   @@index([type])
   @@index([clientProfileId])
+  @@index([clientProfileId, status])
   @@index([deletedAt])
   @@index([startDate])
   @@map("cases")
@@ -409,6 +410,7 @@ model CaseTimeline {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([caseId])
+  @@index([caseId, isPublic, createdAt])
   @@index([createdAt])
   @@map("case_timeline")
 }
@@ -604,6 +606,7 @@ model Invoice {
 
   @@index([caseId])
   @@index([clientProfileId])
+  @@index([clientProfileId, status])
   @@index([status])
   @@index([dueDate])
   @@map("invoices")
@@ -774,8 +777,10 @@ model ClientMessage {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([caseId])
+  @@index([caseId, createdAt])
   @@index([senderId])
   @@index([receiverId])
+  @@index([receiverId, readAt])
   @@index([createdAt])
   @@map("client_messages")
 }
@@ -799,6 +804,7 @@ model Notification {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([userId])
+  @@index([userId, readAt])
   @@index([readAt])
   @@map("notifications")
 }
@@ -868,7 +874,7 @@ model WebhookDelivery {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@index([endpointId])
+  @@index([endpointId, createdAt])
   @@index([event])
   @@index([createdAt])
   @@map("webhook_deliveries")

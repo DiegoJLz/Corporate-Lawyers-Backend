@@ -7,6 +7,8 @@ import {
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../core/database/prisma.service';
 import { AuditService } from '../../services/audit/audit.service';
+import { AppCacheService } from '../../common/cache/cache.service';
+import { CacheKeys, CacheTTL } from '../../common/cache/cache-key.constants';
 import { CreateUserDto, CreateLawyerProfileDto, CreateClientProfileDto } from './dto/create-user.dto';
 import { UpdateUserDto, UpdateLawyerProfileDto, UpdateClientProfileDto } from './dto/update-user.dto';
 import { UserQueryDto } from './dto/user-query.dto';
@@ -17,6 +19,7 @@ export class UserService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly cacheService: AppCacheService,
   ) {}
 
   async create(dto: CreateUserDto) {
@@ -88,20 +91,26 @@ export class UserService {
   }
 
   async findOne(id: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { id, deletedAt: null },
-      select: {
-        ...this.userSelect,
-        lawyerProfile: true,
-        clientProfile: true,
+    return this.cacheService.getOrSet(
+      CacheKeys.USER_PROFILE(id),
+      async () => {
+        const user = await this.prisma.user.findFirst({
+          where: { id, deletedAt: null },
+          select: {
+            ...this.userSelect,
+            lawyerProfile: true,
+            clientProfile: true,
+          },
+        });
+
+        if (!user) {
+          throw new NotFoundException(`User with ID ${id} not found`);
+        }
+
+        return user;
       },
-    });
-
-    if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
-    }
-
-    return user;
+      CacheTTL.LONG,
+    );
   }
 
   async update(id: string, dto: UpdateUserDto) {
@@ -117,6 +126,8 @@ export class UserService {
       select: this.userSelect,
     });
 
+    await this.cacheService.del(CacheKeys.USER_PROFILE(id));
+
     return user;
   }
 
@@ -131,6 +142,8 @@ export class UserService {
       where: { id },
       data: { deletedAt: new Date() },
     });
+
+    await this.cacheService.del(CacheKeys.USER_PROFILE(id));
 
     await this.auditService.log({
       userId: performedBy,

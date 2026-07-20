@@ -8,6 +8,7 @@ import * as bcrypt from 'bcryptjs';
 import { UserService } from '../user.service';
 import { PrismaService } from '../../../core/database/prisma.service';
 import { AuditService } from '../../../services/audit/audit.service';
+import { AppCacheService } from '../../../common/cache/cache.service';
 import { UserRole } from '@prisma/client';
 
 jest.mock('bcryptjs');
@@ -90,6 +91,10 @@ describe('UserService', () => {
         {
           provide: AuditService,
           useValue: mockAuditService,
+        },
+        {
+          provide: AppCacheService,
+          useValue: { get: jest.fn(), set: jest.fn(), del: jest.fn(), getOrSet: jest.fn((k: string, fn: () => any) => fn()), invalidatePattern: jest.fn() },
         },
       ],
     }).compile();
