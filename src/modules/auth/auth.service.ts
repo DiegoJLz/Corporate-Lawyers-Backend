@@ -3,12 +3,14 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  NotFoundException,
+  ForbiddenException,
   Logger,
   Inject,
 } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import * as OTPAuth from 'otpauth';
 import * as QRCode from 'qrcode';
@@ -117,7 +119,8 @@ export class AuthService {
         throw new UnauthorizedException('Two-factor authentication code is required');
       }
 
-      const isValid = this.verifyTotpCode(user.twoFactorSecret!, dto.twoFactorCode);
+      const totpSecret = this.extractTotpSecret(user.twoFactorSecret!);
+      const isValid = this.verifyTotpCode(totpSecret, dto.twoFactorCode);
       if (!isValid) {
         throw new UnauthorizedException('Invalid two-factor authentication code');
       }
@@ -221,6 +224,56 @@ export class AuthService {
     });
   }
 
+  // ─── Sessions ──────────────────────────────────────────────────
+
+  async getSessions(userId: string) {
+    const sessions = await this.prisma.session.findMany({
+      where: {
+        userId,
+        isRevoked: false,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return sessions.map((s) => ({
+      id: s.id,
+      userAgent: s.userAgent,
+      ipAddress: s.ipAddress,
+      createdAt: s.createdAt,
+      expiresAt: s.expiresAt,
+      ...this.parseUserAgent(s.userAgent),
+    }));
+  }
+
+  async revokeSession(sessionId: string, userId: string) {
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    if (session.userId !== userId) {
+      throw new ForbiddenException('You can only revoke your own sessions');
+    }
+
+    await this.prisma.session.update({
+      where: { id: sessionId },
+      data: { isRevoked: true },
+    });
+
+    await this.auditService.log({
+      userId,
+      action: 'SESSION_REVOKED',
+      entityType: 'Session',
+      entityId: sessionId,
+    });
+
+    return { message: 'Session revoked successfully' };
+  }
+
   // ─── 2FA ──────────────────────────────────────────────────────
 
   async setupTwoFactor(userId: string) {
@@ -243,9 +296,24 @@ export class AuthService {
       secret,
     });
 
+    // Generate 6 recovery codes (8-char alphanumeric each)
+    const recoveryCodes = Array.from({ length: 6 }, () =>
+      randomBytes(4).toString('hex').toUpperCase().slice(0, 8),
+    );
+
+    // Hash recovery codes with SHA-256 for storage
+    const hashedRecoveryCodes = recoveryCodes.map((code) =>
+      createHash('sha256').update(code).digest('hex'),
+    );
+
     await this.prisma.user.update({
       where: { id: userId },
-      data: { twoFactorSecret: secret.base32 },
+      data: {
+        twoFactorSecret: JSON.stringify({
+          totp: secret.base32,
+          recoveryCodes: hashedRecoveryCodes,
+        }),
+      },
     });
 
     const otpauthUrl = totp.toString();
@@ -255,6 +323,7 @@ export class AuthService {
       secret: secret.base32,
       qrCode: qrCodeDataUrl,
       otpauthUrl,
+      recoveryCodes,
     };
   }
 
@@ -271,7 +340,8 @@ export class AuthService {
       throw new BadRequestException('Two-factor authentication is already enabled');
     }
 
-    const isValid = this.verifyTotpCode(user.twoFactorSecret, code);
+    const totpSecret = this.extractTotpSecret(user.twoFactorSecret);
+    const isValid = this.verifyTotpCode(totpSecret, code);
     if (!isValid) {
       throw new BadRequestException('Invalid verification code');
     }
@@ -300,7 +370,8 @@ export class AuthService {
       throw new BadRequestException('Two-factor authentication is not enabled');
     }
 
-    const isValid = this.verifyTotpCode(user.twoFactorSecret!, code);
+    const totpSecret = this.extractTotpSecret(user.twoFactorSecret!);
+    const isValid = this.verifyTotpCode(totpSecret, code);
     if (!isValid) {
       throw new UnauthorizedException('Invalid verification code');
     }
@@ -321,6 +392,72 @@ export class AuthService {
     });
 
     return { message: 'Two-factor authentication disabled successfully' };
+  }
+
+  async recoverTwoFactor(email: string, recoveryCode: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (!user || user.deletedAt || !user.twoFactorEnabled || !user.twoFactorSecret) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Parse stored secret to get recovery codes
+    let parsed: { totp: string; recoveryCodes: string[] };
+    try {
+      parsed = JSON.parse(user.twoFactorSecret);
+    } catch {
+      throw new BadRequestException('No recovery codes available');
+    }
+
+    if (!parsed.recoveryCodes || parsed.recoveryCodes.length === 0) {
+      throw new BadRequestException('No recovery codes available');
+    }
+
+    // Hash the provided recovery code and compare
+    const codeHash = createHash('sha256').update(recoveryCode.toUpperCase()).digest('hex');
+    const matchIndex = parsed.recoveryCodes.indexOf(codeHash);
+
+    if (matchIndex === -1) {
+      throw new UnauthorizedException('Invalid recovery code');
+    }
+
+    // Remove the used recovery code
+    parsed.recoveryCodes.splice(matchIndex, 1);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        twoFactorSecret: JSON.stringify(parsed),
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        lastLoginAt: new Date(),
+      },
+    });
+
+    const tokens = await this.generateTokens(user.id, user.email, user.role);
+    await this.createSession(user.id, tokens.refreshToken);
+
+    await this.auditService.log({
+      userId: user.id,
+      action: '2FA_RECOVERY',
+      entityType: 'User',
+      entityId: user.id,
+    });
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        twoFactorEnabled: user.twoFactorEnabled,
+      },
+      ...tokens,
+      remainingRecoveryCodes: parsed.recoveryCodes.length,
+    };
   }
 
   // ─── Password Reset ──────────────────────────────────────────
@@ -502,5 +639,40 @@ export class AuthService {
   // A2: Hash tokens with SHA-256 before storing
   private hashToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  /**
+   * Extract the TOTP secret from twoFactorSecret field.
+   * Supports both legacy plain base32 strings and the new JSON format
+   * { totp: string, recoveryCodes: string[] }.
+   */
+  private extractTotpSecret(twoFactorSecret: string): string {
+    try {
+      const parsed = JSON.parse(twoFactorSecret);
+      return parsed.totp;
+    } catch {
+      // Legacy format: plain base32 string
+      return twoFactorSecret;
+    }
+  }
+
+  private parseUserAgent(ua?: string | null): { browser: string; os: string } {
+    if (!ua) return { browser: 'Unknown', os: 'Unknown' };
+
+    let browser = 'Unknown';
+    if (ua.includes('Firefox/')) browser = 'Firefox';
+    else if (ua.includes('Edg/')) browser = 'Edge';
+    else if (ua.includes('Chrome/')) browser = 'Chrome';
+    else if (ua.includes('Safari/')) browser = 'Safari';
+    else if (ua.includes('Opera/') || ua.includes('OPR/')) browser = 'Opera';
+
+    let os = 'Unknown';
+    if (ua.includes('Windows')) os = 'Windows';
+    else if (ua.includes('Mac OS X') || ua.includes('Macintosh')) os = 'macOS';
+    else if (ua.includes('Linux')) os = 'Linux';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+
+    return { browser, os };
   }
 }

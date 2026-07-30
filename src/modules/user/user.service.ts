@@ -4,6 +4,7 @@ import {
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../core/database/prisma.service';
 import { AuditService } from '../../services/audit/audit.service';
@@ -228,6 +229,47 @@ export class UserService {
     });
   }
 
+  // ─── Admin Password Reset ──────────────────────────────────
+
+  async adminResetPassword(targetUserId: string, performedByUserId: string) {
+    await this.findOne(targetUserId);
+
+    if (targetUserId === performedByUserId) {
+      throw new ForbiddenException('Use the standard password reset flow for your own account');
+    }
+
+    // Generate a temporary password: 12-char alphanumeric
+    const tempPassword = randomBytes(9).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) + 'A1!';
+    const passwordHash = await bcrypt.hash(tempPassword, 12);
+
+    await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: {
+        passwordHash,
+        passwordChangedAt: new Date(),
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      },
+    });
+
+    // Revoke all sessions for the target user
+    await this.prisma.session.updateMany({
+      where: { userId: targetUserId },
+      data: { isRevoked: true },
+    });
+
+    await this.cacheService.del(CacheKeys.USER_PROFILE(targetUserId));
+
+    await this.auditService.log({
+      userId: performedByUserId,
+      action: 'ADMIN_PASSWORD_RESET',
+      entityType: 'User',
+      entityId: targetUserId,
+    });
+
+    return { temporaryPassword: tempPassword };
+  }
+
   // ─── Select fields ──────────────────────────────────────────
 
   private readonly userSelect = {
@@ -241,6 +283,8 @@ export class UserService {
     avatarUrl: true,
     twoFactorEnabled: true,
     lastLoginAt: true,
+    preferredLanguage: true,
+    passwordChangedAt: true,
     createdAt: true,
     updatedAt: true,
   } satisfies Prisma.UserSelect;

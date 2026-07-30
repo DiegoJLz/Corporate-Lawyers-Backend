@@ -24,6 +24,8 @@ import { CfdiModule } from './modules/integrations/cfdi/cfdi.module';
 import { SignatureModule } from './modules/integrations/signatures/signature.module';
 import { WebhookModule } from './modules/integrations/webhooks/webhook.module';
 import { LoggerModule } from './common/logger/logger.module';
+import { StatsModule } from './modules/stats/stats.module';
+import { SettingsModule } from './modules/settings/settings.module';
 import { HealthModule } from './modules/health/health.module';
 import { AppCacheModule } from './common/cache/cache.module';
 import { SanitizeMiddleware } from './common/middleware/sanitize.middleware';
@@ -107,7 +109,7 @@ import mailConfig from './core/config/mail.config';
         THROTTLE_TTL: Joi.number().default(60000),
         THROTTLE_LIMIT: Joi.number().default(60),
       }),
-      validationOptions: { allowUnknown: false, abortEarly: false },
+      validationOptions: { allowUnknown: true, abortEarly: false },
     }),
 
     // Rate Limiting
@@ -152,6 +154,10 @@ import mailConfig from './core/config/mail.config';
     CfdiModule,
     SignatureModule,
     WebhookModule,
+
+    // Dashboard & Settings
+    StatsModule,
+    SettingsModule,
 
     // Hardening — Phase 6
     HealthModule,

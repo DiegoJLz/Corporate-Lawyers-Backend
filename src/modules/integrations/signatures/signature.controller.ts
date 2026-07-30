@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -43,6 +44,26 @@ export class SignatureController {
   @ApiOperation({ summary: 'Get signature request by ID' })
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.signatureService.findOne(id);
+  }
+
+  @Post(':id/resend')
+  @Roles(UserRole.ADMIN, UserRole.LAWYER)
+  @ApiOperation({ summary: 'Resend signature request notification' })
+  async resendRequest(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.signatureService.resendRequest(id, userId);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.ADMIN, UserRole.LAWYER)
+  @ApiOperation({ summary: 'Cancel a pending signature request' })
+  async cancelRequest(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.signatureService.cancelRequest(id, userId);
   }
 
 }

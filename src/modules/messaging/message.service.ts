@@ -233,6 +233,106 @@ export class MessageService {
     return { caseId, count };
   }
 
+  // ─── Conversations ─────────────────────────────────────────────
+
+  async getConversations(userId: string, userRole: string) {
+    // Get case IDs user has access to
+    let caseIds: string[];
+
+    if (userRole === UserRole.SUPER_ADMIN || userRole === UserRole.ADMIN) {
+      // Admins see all cases with messages
+      const casesWithMessages = await this.prisma.clientMessage.findMany({
+        select: { caseId: true },
+        distinct: ['caseId'],
+      });
+      caseIds = casesWithMessages.map((m) => m.caseId);
+    } else if (userRole === UserRole.CLIENT) {
+      // Client: cases via clientProfile
+      const clientProfile = await this.prisma.clientProfile.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+
+      if (!clientProfile) return [];
+
+      const cases = await this.prisma.case.findMany({
+        where: { clientProfileId: clientProfile.id },
+        select: { id: true },
+      });
+      caseIds = cases.map((c) => c.id);
+    } else {
+      // Lawyer/Assistant: cases via assignment
+      const assignments = await this.prisma.caseAssignment.findMany({
+        where: { userId, removedAt: null },
+        select: { caseId: true },
+      });
+      caseIds = assignments.map((a) => a.caseId);
+    }
+
+    if (caseIds.length === 0) return [];
+
+    // Get cases that have at least 1 message
+    const casesWithMessages = await this.prisma.case.findMany({
+      where: {
+        id: { in: caseIds },
+        messages: { some: {} },
+      },
+      select: {
+        id: true,
+        caseNumber: true,
+        title: true,
+        legalArea: true,
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            content: true,
+            createdAt: true,
+            senderId: true,
+          },
+        },
+      },
+    });
+
+    // Build conversation summaries with unread counts
+    const conversations = await Promise.all(
+      casesWithMessages.map(async (c) => {
+        const unreadCount = await this.prisma.clientMessage.count({
+          where: {
+            caseId: c.id,
+            receiverId: userId,
+            readAt: null,
+          },
+        });
+
+        const lastMsg = c.messages[0];
+        return {
+          caseId: c.id,
+          caseNumber: c.caseNumber,
+          caseTitle: c.title,
+          legalArea: c.legalArea,
+          lastMessage: lastMsg
+            ? {
+                content: lastMsg.content.substring(0, 100) + (lastMsg.content.length > 100 ? '...' : ''),
+                createdAt: lastMsg.createdAt,
+                senderId: lastMsg.senderId,
+              }
+            : null,
+          unreadCount,
+        };
+      }),
+    );
+
+    // Sort by lastMessage.createdAt desc
+    conversations.sort((a, b) => {
+      const dateA = a.lastMessage?.createdAt?.getTime() ?? 0;
+      const dateB = b.lastMessage?.createdAt?.getTime() ?? 0;
+      return dateB - dateA;
+    });
+
+    return conversations;
+  }
+
   // ─── Access Helpers ────────────────────────────────────────────
 
   /**

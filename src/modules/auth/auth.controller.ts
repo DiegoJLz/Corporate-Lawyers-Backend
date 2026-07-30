@@ -1,14 +1,14 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, Param, HttpCode, HttpStatus, Req, ParseUUIDPipe } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
-import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyTwoFactorDto } from './dto/two-factor.dto';
+import { RecoverTwoFactorDto } from './dto/recover-two-factor.dto';
 import { Public } from '../../core/security/decorators/public.decorator';
 import { CurrentUser } from '../../core/security/decorators/current-user.decorator';
 
@@ -61,6 +61,26 @@ export class AuthController {
     return this.authService.logoutAll(userId);
   }
 
+  // ─── Sessions ──────────────────────────────────────────────────
+
+  @Get('sessions')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get active sessions for current user' })
+  async getSessions(@CurrentUser('userId') userId: string) {
+    return this.authService.getSessions(userId);
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke a specific session' })
+  async revokeSession(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.authService.revokeSession(id, userId);
+  }
+
   // ─── 2FA ──────────────────────────────────────────────────────
 
   @Post('2fa/setup')
@@ -91,6 +111,15 @@ export class AuthController {
     @Body() dto: VerifyTwoFactorDto,
   ) {
     return this.authService.disableTwoFactor(userId, dto.code);
+  }
+
+  @Public()
+  @Post('2fa/recover')
+  @Throttle({ default: { ttl: 60000, limit: 3 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login using a 2FA recovery code' })
+  async recoverTwoFactor(@Body() dto: RecoverTwoFactorDto) {
+    return this.authService.recoverTwoFactor(dto.email, dto.recoveryCode);
   }
 
   // ─── Password Reset ──────────────────────────────────────────

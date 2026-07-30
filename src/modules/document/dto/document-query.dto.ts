@@ -1,4 +1,4 @@
-import { IsOptional, IsEnum, IsUUID, IsString, IsIn } from 'class-validator';
+import { IsOptional, IsEnum, IsUUID, IsString, IsIn, IsDateString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { DocumentType } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
@@ -33,4 +33,14 @@ export class DocumentQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   tag?: string;
+
+  @ApiPropertyOptional({ description: 'Filter documents created from this date' })
+  @IsOptional()
+  @IsDateString()
+  dateFrom?: string;
+
+  @ApiPropertyOptional({ description: 'Filter documents created up to this date' })
+  @IsOptional()
+  @IsDateString()
+  dateTo?: string;
 }

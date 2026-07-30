@@ -1,10 +1,59 @@
+name: corporate-lawyers
+
 services:
+  backend:
+    container_name: cl-backend
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/corporate_lawyers?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_ACCESS_KEY: minioadmin
+      STORAGE_SECRET_KEY: minioadmin
+      STORAGE_BUCKET: corporate-lawyers
+      STORAGE_REGION: us-east-1
+      JWT_ACCESS_SECRET: dev-access-secret-change-in-production-32chars!
+      JWT_ACCESS_EXPIRATION: 15m
+      JWT_REFRESH_SECRET: dev-refresh-secret-change-in-production-32chars
+      JWT_REFRESH_EXPIRATION: 7d
+      BCRYPT_ROUNDS: 12
+      EMAIL_PROVIDER: sendgrid
+      MAIL_FROM: noreply@corporatelawyers.com
+      SENDGRID_API_KEY: ''
+      CFDI_PROVIDER: none
+      SIGNATURE_PROVIDER: none
+      SIGNATURE_WEBHOOK_SECRET: dev-webhook-secret
+      FIRM_NAME: Corporate Lawyers S.C.
+      PORTAL_URL: http://localhost:5173
+      API_URL: http://localhost:3000
+      LOG_LEVEL: debug
+      CACHE_TTL: 300
+      COOKIE_SECRET: dev-cookie-secret
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3001
+      THROTTLE_TTL: 60000
+      THROTTLE_LIMIT: 60
+    volumes:
+      - ../src:/app/src
+      - ../prisma:/app/prisma
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     container_name: cl-postgres
     restart: unless-stopped
     ports:
-      - '5432:5432'
+      - '5433:5432'
     environment:
       POSTGRES_DB: corporate_lawyers
       POSTGRES_USER: postgres

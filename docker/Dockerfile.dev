@@ -1,15 +1,17 @@
 FROM node:22-alpine
 
+RUN apk add --no-cache openssl
+
 WORKDIR /app
 
 COPY package*.json ./
+RUN npm ci
 
-RUN npm ci --ignore-scripts
+COPY prisma ./prisma/
+RUN npx prisma generate
 
 COPY . .
 
-RUN npx prisma generate
-
 EXPOSE 3000
 
-CMD ["npm", "run", "start:dev"]
+CMD sh -c "npx prisma migrate deploy 2>/dev/null; node node_modules/ts-node-dev/lib/bin.js --respawn --transpile-only -r tsconfig-paths/register --poll src/main.ts"

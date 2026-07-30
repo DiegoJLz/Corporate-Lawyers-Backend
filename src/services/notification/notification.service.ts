@@ -12,6 +12,10 @@ interface SendNotificationParams {
   title: string;
   body: string;
   data?: Record<string, unknown>;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
+  generatedByUserId?: string;
+  actionUrl?: string;
 }
 
 @Injectable()
@@ -24,7 +28,7 @@ export class NotificationService {
   ) {}
 
   async send(params: SendNotificationParams) {
-    const { userId, type, title, body, data } = params;
+    const { userId, type, title, body, data, relatedEntityType, relatedEntityId, generatedByUserId, actionUrl } = params;
 
     const notification = await this.prisma.notification.create({
       data: {
@@ -33,6 +37,10 @@ export class NotificationService {
         title,
         body,
         data: data ?? undefined,
+        relatedEntityType,
+        relatedEntityId,
+        generatedByUserId,
+        actionUrl,
       },
     });
 

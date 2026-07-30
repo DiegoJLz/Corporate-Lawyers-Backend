@@ -186,6 +186,7 @@ model User {
   lastLoginAt         DateTime?  @map("last_login_at")
   failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
   lockedUntil         DateTime?  @map("locked_until")
+  passwordChangedAt   DateTime?  @map("password_changed_at")
 
   // Profiles by role
   lawyerProfile    LawyerProfile?
@@ -555,6 +556,7 @@ model Expense {
   id          String  @id @default(uuid())
   caseId      String  @map("case_id")
   createdById String  @map("created_by_id")
+  category    String?
   description String
   amount      Decimal @db.Decimal(10, 2)
   receiptUrl  String? @map("receipt_url")
@@ -633,6 +635,7 @@ model Payment {
   status        PaymentStatus @default(PENDING)
   transactionId String?       @unique @map("transaction_id")
   reference     String?
+  receiptUrl    String?       @map("receipt_url")
   notes         String?
   paidAt        DateTime      @default(now()) @map("paid_at")
 
@@ -712,6 +715,9 @@ model Lead {
   lastName       String     @map("last_name")
   email          String
   phone          String?
+  companyName    String?    @map("company_name")
+  location       String?
+  priority       String?    @default("MEDIUM")
   source         LeadSource @default(WEBSITE)
   areaOfInterest String?    @map("area_of_interest")
   message        String?
@@ -790,14 +796,18 @@ model ClientMessage {
 // ============================================================
 
 model Notification {
-  id     String           @id @default(uuid())
-  userId String           @map("user_id")
-  type   NotificationType
-  title  String
-  body   String
-  data   Json?
-  readAt DateTime?        @map("read_at")
-  sentAt DateTime?        @map("sent_at")
+  id                String           @id @default(uuid())
+  userId            String           @map("user_id")
+  type              NotificationType
+  title             String
+  body              String
+  data              Json?
+  relatedEntityType String?          @map("related_entity_type")
+  relatedEntityId   String?          @map("related_entity_id")
+  generatedByUserId String?          @map("generated_by_user_id")
+  actionUrl         String?          @map("action_url")
+  readAt            DateTime?        @map("read_at")
+  sentAt            DateTime?        @map("sent_at")
 
   user User @relation(fields: [userId], references: [id])
 

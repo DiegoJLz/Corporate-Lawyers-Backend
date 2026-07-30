@@ -78,6 +78,19 @@ export class UserController {
     return this.userService.remove(id, performedBy);
   }
 
+  // ─── Admin Password Reset ──────────────────────────────────
+
+  @Post(':id/reset-password')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Admin reset password for a user' })
+  async adminResetPassword(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('userId') performedBy: string,
+  ) {
+    return this.userService.adminResetPassword(id, performedBy);
+  }
+
   // ─── Profiles ──────────────────────────────────────────────
 
   @Post(':id/lawyer-profile')

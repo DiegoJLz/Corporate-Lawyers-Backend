@@ -8,4 +8,5 @@ export class CreateExpenseDto {
   @ApiPropertyOptional({ default: true }) @IsOptional() @IsBoolean() isBillable?: boolean;
   @ApiProperty({ example: '2026-07-01' }) @IsDateString() date: string;
   @ApiPropertyOptional() @IsOptional() @IsString() receiptUrl?: string;
+  @ApiPropertyOptional({ example: 'Viáticos' }) @IsOptional() @IsString() @MaxLength(100) category?: string;
 }

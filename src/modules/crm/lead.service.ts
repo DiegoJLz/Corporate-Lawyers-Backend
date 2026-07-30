@@ -8,6 +8,7 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../core/database/prisma.service';
 import { AuditService } from '../../services/audit/audit.service';
 import { NotificationService } from '../../services/notification/notification.service';
+import { CASE_NUMBER_PREFIX } from '../../common/constants/app.constants';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { LeadQueryDto } from './dto/lead-query.dto';
@@ -22,6 +23,7 @@ import {
   UserStatus,
   NotificationType,
   ClientType,
+  CaseAssignmentRole,
 } from '@prisma/client';
 
 // Valid status transitions
@@ -306,7 +308,7 @@ export class LeadService {
       });
 
       // Create client profile
-      await tx.clientProfile.create({
+      const clientProfile = await tx.clientProfile.create({
         data: {
           userId: newUser.id,
           clientType: dto.clientType ?? ClientType.INDIVIDUAL,
@@ -320,6 +322,50 @@ export class LeadService {
         where: { id },
         data: { status: LeadStatus.CONVERTED },
       });
+
+      // If assignedLawyerId and caseTitle are provided, auto-create a Case
+      if (dto.assignedLawyerId && dto.caseTitle) {
+        const year = new Date().getFullYear();
+        const prefix = `${CASE_NUMBER_PREFIX}-${year}-`;
+
+        const lastCase = await tx.case.findFirst({
+          where: { caseNumber: { startsWith: prefix } },
+          orderBy: { caseNumber: 'desc' },
+        });
+
+        const nextNumber = lastCase
+          ? parseInt(lastCase.caseNumber.split('-').pop()!, 10) + 1
+          : 1;
+
+        const caseNumber = `${prefix}${nextNumber.toString().padStart(5, '0')}`;
+
+        const newCase = await tx.case.create({
+          data: {
+            caseNumber,
+            title: dto.caseTitle,
+            type: dto.caseType ?? 'OTHER',
+            clientProfileId: clientProfile.id,
+            legalArea: lead.areaOfInterest,
+          },
+        });
+
+        await tx.caseAssignment.create({
+          data: {
+            caseId: newCase.id,
+            userId: dto.assignedLawyerId,
+            role: CaseAssignmentRole.LEAD_ATTORNEY,
+          },
+        });
+
+        await tx.caseTimeline.create({
+          data: {
+            caseId: newCase.id,
+            eventType: 'CASE_CREATED',
+            title: `Case created from lead conversion: ${lead.firstName} ${lead.lastName}`,
+            isPublic: true,
+          },
+        });
+      }
 
       return newUser;
     });

@@ -1,6 +1,6 @@
-import { IsString, IsOptional, IsEnum, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUUID, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ClientType } from '@prisma/client';
+import { ClientType, CaseType } from '@prisma/client';
 
 export class ConvertLeadDto {
   @ApiProperty({ example: 'SecurePass123!' })
@@ -22,4 +22,19 @@ export class ConvertLeadDto {
   @IsOptional()
   @IsString()
   companyName?: string;
+
+  @ApiPropertyOptional({ description: 'Lawyer ID to assign to auto-created case' })
+  @IsOptional()
+  @IsUUID()
+  assignedLawyerId?: string;
+
+  @ApiPropertyOptional({ example: 'Caso Laboral - Juan Pérez' })
+  @IsOptional()
+  @IsString()
+  caseTitle?: string;
+
+  @ApiPropertyOptional({ enum: CaseType })
+  @IsOptional()
+  @IsEnum(CaseType)
+  caseType?: CaseType;
 }
