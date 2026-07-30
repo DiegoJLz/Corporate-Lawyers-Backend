@@ -112,6 +112,11 @@ export class DocumentService {
         some: { caseId: query.caseId },
       };
     }
+    if (query.dateFrom || query.dateTo) {
+      where.createdAt = {};
+      if (query.dateFrom) where.createdAt.gte = new Date(query.dateFrom);
+      if (query.dateTo) where.createdAt.lte = new Date(query.dateTo);
+    }
 
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
@@ -132,6 +137,10 @@ export class DocumentService {
               lastName: true,
               email: true,
             },
+          },
+          caseDocuments: {
+            include: { case: { select: { id: true, caseNumber: true, title: true } } },
+            take: 3,
           },
           _count: {
             select: { caseDocuments: true, versions: true },

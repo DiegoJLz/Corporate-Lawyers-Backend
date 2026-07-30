@@ -4,9 +4,12 @@ import {
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../core/database/prisma.service';
 import { AuditService } from '../../services/audit/audit.service';
+import { AppCacheService } from '../../common/cache/cache.service';
+import { CacheKeys, CacheTTL } from '../../common/cache/cache-key.constants';
 import { CreateUserDto, CreateLawyerProfileDto, CreateClientProfileDto } from './dto/create-user.dto';
 import { UpdateUserDto, UpdateLawyerProfileDto, UpdateClientProfileDto } from './dto/update-user.dto';
 import { UserQueryDto } from './dto/user-query.dto';
@@ -17,6 +20,7 @@ export class UserService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly cacheService: AppCacheService,
   ) {}
 
   async create(dto: CreateUserDto) {
@@ -88,20 +92,26 @@ export class UserService {
   }
 
   async findOne(id: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { id, deletedAt: null },
-      select: {
-        ...this.userSelect,
-        lawyerProfile: true,
-        clientProfile: true,
+    return this.cacheService.getOrSet(
+      CacheKeys.USER_PROFILE(id),
+      async () => {
+        const user = await this.prisma.user.findFirst({
+          where: { id, deletedAt: null },
+          select: {
+            ...this.userSelect,
+            lawyerProfile: true,
+            clientProfile: true,
+          },
+        });
+
+        if (!user) {
+          throw new NotFoundException(`User with ID ${id} not found`);
+        }
+
+        return user;
       },
-    });
-
-    if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
-    }
-
-    return user;
+      CacheTTL.LONG,
+    );
   }
 
   async update(id: string, dto: UpdateUserDto) {
@@ -117,6 +127,8 @@ export class UserService {
       select: this.userSelect,
     });
 
+    await this.cacheService.del(CacheKeys.USER_PROFILE(id));
+
     return user;
   }
 
@@ -131,6 +143,8 @@ export class UserService {
       where: { id },
       data: { deletedAt: new Date() },
     });
+
+    await this.cacheService.del(CacheKeys.USER_PROFILE(id));
 
     await this.auditService.log({
       userId: performedBy,
@@ -215,6 +229,47 @@ export class UserService {
     });
   }
 
+  // ─── Admin Password Reset ──────────────────────────────────
+
+  async adminResetPassword(targetUserId: string, performedByUserId: string) {
+    await this.findOne(targetUserId);
+
+    if (targetUserId === performedByUserId) {
+      throw new ForbiddenException('Use the standard password reset flow for your own account');
+    }
+
+    // Generate a temporary password: 12-char alphanumeric
+    const tempPassword = randomBytes(9).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) + 'A1!';
+    const passwordHash = await bcrypt.hash(tempPassword, 12);
+
+    await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: {
+        passwordHash,
+        passwordChangedAt: new Date(),
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      },
+    });
+
+    // Revoke all sessions for the target user
+    await this.prisma.session.updateMany({
+      where: { userId: targetUserId },
+      data: { isRevoked: true },
+    });
+
+    await this.cacheService.del(CacheKeys.USER_PROFILE(targetUserId));
+
+    await this.auditService.log({
+      userId: performedByUserId,
+      action: 'ADMIN_PASSWORD_RESET',
+      entityType: 'User',
+      entityId: targetUserId,
+    });
+
+    return { temporaryPassword: tempPassword };
+  }
+
   // ─── Select fields ──────────────────────────────────────────
 
   private readonly userSelect = {
@@ -228,6 +283,8 @@ export class UserService {
     avatarUrl: true,
     twoFactorEnabled: true,
     lastLoginAt: true,
+    preferredLanguage: true,
+    passwordChangedAt: true,
     createdAt: true,
     updatedAt: true,
   } satisfies Prisma.UserSelect;

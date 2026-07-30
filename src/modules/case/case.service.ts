@@ -8,6 +8,8 @@ import { PrismaService } from '../../core/database/prisma.service';
 import { AuditService } from '../../services/audit/audit.service';
 import { ConflictCheckService } from './conflict-check.service';
 import { WebhookDispatcherService } from '../../modules/integrations/webhooks/webhook-dispatcher.service';
+import { AppCacheService } from '../../common/cache/cache.service';
+import { CacheKeys, CacheTTL } from '../../common/cache/cache-key.constants';
 import { CreateCaseDto } from './dto/create-case.dto';
 import { UpdateCaseDto } from './dto/update-case.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
@@ -42,6 +44,7 @@ export class CaseService {
     private readonly auditService: AuditService,
     private readonly conflictCheckService: ConflictCheckService,
     private readonly webhookDispatcher: WebhookDispatcherService,
+    private readonly cacheService: AppCacheService,
   ) {}
 
   // ─── CRUD ──────────────────────────────────────────────────────
@@ -215,25 +218,31 @@ export class CaseService {
   }
 
   async findOne(id: string) {
-    const caseData = await this.prisma.case.findFirst({
-      where: { id },
-      include: {
-        clientProfile: {
-          include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
-        },
-        assignments: {
-          where: { removedAt: null },
-          include: { user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } } },
-        },
-        _count: { select: { parties: true, notes: true, tasks: true, caseDocuments: true } },
+    return this.cacheService.getOrSet(
+      CacheKeys.CASE_DETAIL(id),
+      async () => {
+        const caseData = await this.prisma.case.findFirst({
+          where: { id },
+          include: {
+            clientProfile: {
+              include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+            },
+            assignments: {
+              where: { removedAt: null },
+              include: { user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } } },
+            },
+            _count: { select: { parties: true, notes: true, tasks: true, caseDocuments: true } },
+          },
+        });
+
+        if (!caseData) {
+          throw new NotFoundException(`Case with ID ${id} not found`);
+        }
+
+        return caseData;
       },
-    });
-
-    if (!caseData) {
-      throw new NotFoundException(`Case with ID ${id} not found`);
-    }
-
-    return caseData;
+      CacheTTL.MEDIUM,
+    );
   }
 
   async update(id: string, dto: UpdateCaseDto, userId: string) {
@@ -256,6 +265,8 @@ export class CaseService {
       },
     });
 
+    await this.cacheService.del(CacheKeys.CASE_DETAIL(id));
+
     await this.auditService.log({
       userId,
       action: 'UPDATE',
@@ -273,6 +284,8 @@ export class CaseService {
       where: { id },
       data: { deletedAt: new Date() },
     });
+
+    await this.cacheService.del(CacheKeys.CASE_DETAIL(id));
 
     await this.auditService.log({
       userId,

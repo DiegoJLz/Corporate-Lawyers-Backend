@@ -8,10 +8,12 @@ import { CancelCfdiDto } from './dto/cancel-cfdi.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { Prisma, InvoiceStatus } from '@prisma/client';
 import { WebhookDispatcherService } from '../webhooks/webhook-dispatcher.service';
+import { CircuitBreaker } from '../../../common/resilience/circuit-breaker';
 
 @Injectable()
 export class CfdiService {
   private readonly logger = new Logger(CfdiService.name);
+  private circuitBreaker = new CircuitBreaker('cfdi', { failureThreshold: 5, recoveryTimeoutMs: 60000 });
 
   private readonly emisorRfc: string;
   private readonly emisorNombre: string;
@@ -94,7 +96,7 @@ export class CfdiService {
       folio: invoice.invoiceNumber.split('-').pop() ?? '00001',
     };
 
-    const result = await this.cfdiProvider.stamp(cfdiData);
+    const result = await this.circuitBreaker.execute(() => this.cfdiProvider.stamp(cfdiData));
 
     await this.prisma.invoice.update({
       where: { id: invoiceId },
@@ -197,7 +199,7 @@ export class CfdiService {
   async getStatus(invoiceId: string) {
     const invoice = await this.prisma.invoice.findFirst({
       where: { id: invoiceId },
-      select: { id: true, invoiceNumber: true, cfdiUuid: true, cfdiXmlUrl: true },
+      select: { id: true, invoiceNumber: true, cfdiUuid: true, cfdiXmlUrl: true, pdfUrl: true },
     });
 
     if (!invoice) {
@@ -210,7 +212,11 @@ export class CfdiService {
         invoiceNumber: invoice.invoiceNumber,
         hasCfdi: false,
         cfdiUuid: null,
+        xmlUrl: null,
+        pdfUrl: null,
         status: null,
+        // NOTE: Fiscal parameters (regimenFiscal, usoCfdi, etc.) used at stamp time
+        // are not stored separately. Store them on the invoice if needed for display.
       };
     }
 
@@ -222,7 +228,10 @@ export class CfdiService {
       hasCfdi: true,
       cfdiUuid: invoice.cfdiUuid,
       xmlUrl: invoice.cfdiXmlUrl,
+      pdfUrl: invoice.pdfUrl,
       status: result.status,
+      // NOTE: Fiscal parameters (regimenFiscal, usoCfdi, etc.) used at stamp time
+      // are not stored separately. Store them on the invoice if needed for display.
     };
   }
 

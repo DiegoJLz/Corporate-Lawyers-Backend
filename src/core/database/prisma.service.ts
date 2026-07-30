@@ -36,6 +36,13 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {
     await (this.client as any).$connect();
     this.logger.log('Database connection established');
+
+    // Slow query logging note:
+    // The PrismaClient is created with { emit: 'event', level: 'query' } in dev,
+    // but the extended client (via $extends / delegation pattern) does not expose
+    // $on('query', ...) on the outer wrapper. Slow query event logging would
+    // require access to the underlying PrismaClient instance before extension.
+    // This is a known limitation of the Prisma client extension / delegation pattern.
   }
 
   async onModuleDestroy(): Promise<void> {

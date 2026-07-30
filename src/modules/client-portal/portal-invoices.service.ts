@@ -59,7 +59,7 @@ export class PortalInvoicesService {
     ]);
 
     return {
-      data,
+      data: data.map((invoice) => ({ ...invoice, currency: 'MXN' as const })),
       meta: {
         total,
         limit,
@@ -108,6 +108,7 @@ export class PortalInvoicesService {
 
     return {
       ...invoice,
+      currency: 'MXN' as const,
       totalPaid: totalPaid.toNumber(),
       pendingAmount: pendingAmount.toNumber(),
     };

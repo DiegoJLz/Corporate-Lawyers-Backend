@@ -9,6 +9,7 @@ export const SOFT_DELETE_MODELS = [
   'Expense',
   'Invoice',
   'Event',
+  'WebhookEndpoint',
 ] as const;
 
 type SoftDeleteModel = (typeof SOFT_DELETE_MODELS)[number];

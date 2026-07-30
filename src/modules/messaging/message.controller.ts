@@ -40,6 +40,15 @@ export class MessageController {
     return this.messageService.send(dto, senderId);
   }
 
+  @Get('conversations')
+  @ApiOperation({ summary: 'Get conversation summaries for the current user' })
+  async getConversations(
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.messageService.getConversations(userId, role);
+  }
+
   @Get('unread')
   @ApiOperation({ summary: 'Get unread message counts grouped by case' })
   async getUnreadCounts(

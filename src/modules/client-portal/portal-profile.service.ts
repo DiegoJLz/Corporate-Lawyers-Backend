@@ -172,6 +172,47 @@ export class PortalProfileService {
     return { isComplete, missingFields };
   }
 
+  async getActivity(userId: string) {
+    const logs = await this.prisma.auditLog.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        action: true,
+        entityType: true,
+        createdAt: true,
+      },
+    });
+
+    return logs.map((log) => ({
+      action: log.action,
+      entityType: log.entityType,
+      createdAt: log.createdAt,
+    }));
+  }
+
+  async getCurrentSession(userId: string) {
+    const session = await this.prisma.session.findFirst({
+      where: {
+        userId,
+        isRevoked: false,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        userAgent: true,
+        ipAddress: true,
+        createdAt: true,
+      },
+    });
+
+    if (!session) {
+      return null;
+    }
+
+    return session;
+  }
+
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

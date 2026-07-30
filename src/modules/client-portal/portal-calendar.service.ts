@@ -139,15 +139,15 @@ export class PortalCalendarService {
         attendees: {
           include: {
             user: {
-              select: { id: true, firstName: true, lastName: true, email: true },
+              select: { id: true, firstName: true, lastName: true, role: true },
             },
           },
         },
         reminders: true,
+        case: { select: { caseNumber: true, title: true } },
         createdBy: {
           select: { id: true, firstName: true, lastName: true },
         },
-        case: { select: { id: true, caseNumber: true, title: true } },
       },
     });
 

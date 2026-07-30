@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  HeadBucketCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import storageConfig from '../../core/config/storage.config';
@@ -69,5 +70,16 @@ export class StorageService {
 
     await this.s3.send(command);
     this.logger.log(`File deleted: ${key}`);
+  }
+
+  async checkConnection(): Promise<boolean> {
+    try {
+      const command = new HeadBucketCommand({ Bucket: this.bucket });
+      await this.s3.send(command);
+      return true;
+    } catch (error) {
+      this.logger.error(`Storage connection check failed: ${(error as Error).message}`);
+      return false;
+    }
   }
 }

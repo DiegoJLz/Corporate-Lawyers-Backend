@@ -3,6 +3,7 @@ import {
   Inject,
   Logger,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,10 +16,12 @@ import { ISignatureProvider } from './providers/signature-provider.interface';
 import { CreateSignatureRequestDto } from './dto/create-signature-request.dto';
 import { SignatureQueryDto } from './dto/signature-query.dto';
 import { WebhookDispatcherService } from '../webhooks/webhook-dispatcher.service';
+import { CircuitBreaker } from '../../../common/resilience/circuit-breaker';
 
 @Injectable()
 export class SignatureService {
   private readonly logger = new Logger(SignatureService.name);
+  private circuitBreaker = new CircuitBreaker('signature', { failureThreshold: 5, recoveryTimeoutMs: 60000 });
 
   constructor(
     private readonly prisma: PrismaService,
@@ -60,17 +63,19 @@ export class SignatureService {
     );
     const callbackUrl = `${apiUrl}/api/v1/webhooks/signatures`;
 
-    const result = await this.signatureProvider.createRequest({
-      documentTitle: document.title,
-      documentUrl: presignedUrl,
-      signers: dto.signers.map((s) => ({
-        name: s.name,
-        email: s.email,
-        order: s.order,
-      })),
-      callbackUrl,
-      message: dto.message,
-    });
+    const result = await this.circuitBreaker.execute(() =>
+      this.signatureProvider.createRequest({
+        documentTitle: document.title,
+        documentUrl: presignedUrl,
+        signers: dto.signers.map((s) => ({
+          name: s.name,
+          email: s.email,
+          order: s.order,
+        })),
+        callbackUrl,
+        message: dto.message,
+      }),
+    );
 
     const signatures = await Promise.all(
       dto.signers.map((signer) =>
@@ -130,6 +135,103 @@ export class SignatureService {
     };
   }
 
+  // ─── Resend Request ─────────────────────────────────────────
+
+  async resendRequest(signatureId: string, userId: string) {
+    const signature = await this.prisma.documentSignature.findUnique({
+      where: { id: signatureId },
+      include: {
+        document: {
+          select: { id: true, title: true },
+        },
+      },
+    });
+
+    if (!signature) {
+      throw new NotFoundException(`Signature with ID ${signatureId} not found`);
+    }
+
+    if (signature.status !== SignatureStatus.PENDING) {
+      throw new BadRequestException(
+        `Cannot resend notification for signature with status: ${signature.status}. Only PENDING signatures can be resent.`,
+      );
+    }
+
+    // Find if signer is a user in the system
+    const signerUser = await this.prisma.user.findFirst({
+      where: { email: signature.signerEmail },
+    });
+
+    if (signerUser) {
+      await this.notificationService.send({
+        userId: signerUser.id,
+        type: NotificationType.EMAIL,
+        title: 'Signature Reminder',
+        body: `Reminder: You have a pending signature request for the document "${signature.document.title}".`,
+        data: {
+          documentId: signature.documentId,
+          signatureId: signature.id,
+        },
+      });
+    }
+
+    await this.auditService.log({
+      userId,
+      action: 'RESEND_SIGNATURE',
+      entityType: 'DocumentSignature',
+      entityId: signatureId,
+      newValue: { signerEmail: signature.signerEmail },
+    });
+
+    this.logger.log(
+      `Signature request resent for signature ${signatureId} to ${signature.signerEmail}`,
+    );
+
+    return { message: 'Signature notification resent successfully' };
+  }
+
+  // ─── Cancel Request ────────────────────────────────────────
+
+  async cancelRequest(signatureId: string, userId: string) {
+    const signature = await this.prisma.documentSignature.findUnique({
+      where: { id: signatureId },
+      include: {
+        document: {
+          select: { id: true, title: true },
+        },
+      },
+    });
+
+    if (!signature) {
+      throw new NotFoundException(`Signature with ID ${signatureId} not found`);
+    }
+
+    if (signature.status !== SignatureStatus.PENDING) {
+      throw new BadRequestException(
+        `Cannot cancel signature with status: ${signature.status}. Only PENDING signatures can be cancelled.`,
+      );
+    }
+
+    await this.prisma.documentSignature.update({
+      where: { id: signatureId },
+      data: { status: SignatureStatus.EXPIRED },
+    });
+
+    await this.auditService.log({
+      userId,
+      action: 'CANCEL_SIGNATURE',
+      entityType: 'DocumentSignature',
+      entityId: signatureId,
+      newValue: { previousStatus: 'PENDING', newStatus: 'EXPIRED' },
+    });
+
+    this.logger.log(
+      `Signature request ${signatureId} cancelled by user ${userId}`,
+    );
+
+    return { message: 'Signature request cancelled successfully' };
+  }
+
   // ─── Find All ───────────────────────────────────────────────
 
   async findAll(query: SignatureQueryDto) {
@@ -151,7 +253,17 @@ export class SignatureService {
         skip: offset,
         include: {
           document: {
-            select: { id: true, title: true, fileName: true },
+            select: {
+              id: true,
+              title: true,
+              fileName: true,
+              caseDocuments: {
+                include: {
+                  case: { select: { id: true, caseNumber: true } },
+                },
+                take: 1,
+              },
+            },
           },
         },
       }),

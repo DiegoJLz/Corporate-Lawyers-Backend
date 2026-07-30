@@ -9,4 +9,5 @@ export class CreatePaymentDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200) reference?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) notes?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() paidAt?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() receiptUrl?: string;
 }

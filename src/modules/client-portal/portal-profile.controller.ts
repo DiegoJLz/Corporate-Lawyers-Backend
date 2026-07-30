@@ -44,6 +44,18 @@ export class PortalProfileController {
     return this.portalProfileService.completeOnboarding(userId, dto);
   }
 
+  @Get('activity')
+  @ApiOperation({ summary: 'Get recent activity for client' })
+  async getActivity(@CurrentUser('userId') userId: string) {
+    return this.portalProfileService.getActivity(userId);
+  }
+
+  @Get('session')
+  @ApiOperation({ summary: 'Get current session info' })
+  async getCurrentSession(@CurrentUser('userId') userId: string) {
+    return this.portalProfileService.getCurrentSession(userId);
+  }
+
   @Get('onboarding-status')
   @ApiOperation({ summary: 'Get onboarding status' })
   async getOnboardingStatus(@CurrentUser('userId') userId: string) {

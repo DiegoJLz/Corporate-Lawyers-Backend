@@ -94,7 +94,7 @@ describe('PortalInvoicesService', () => {
 
       const result = await service.findAll({} as any, 'client-1');
 
-      expect(result.data).toEqual([mockInvoice]);
+      expect(result.data).toEqual([{ ...mockInvoice, currency: 'MXN' }]);
       expect(mockPrismaInvoice.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({

@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsOptional, IsEnum, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsEnum, IsIn, MinLength, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { LeadSource } from '@prisma/client';
 
@@ -41,4 +41,22 @@ export class CreateLeadDto {
   @IsString()
   @MaxLength(5000)
   message?: string;
+
+  @ApiPropertyOptional({ example: 'Grupo Legal S.A. de C.V.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  companyName?: string;
+
+  @ApiPropertyOptional({ example: 'Ciudad de México' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  location?: string;
+
+  @ApiPropertyOptional({ example: 'MEDIUM', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] })
+  @IsOptional()
+  @IsString()
+  @IsIn(['LOW', 'MEDIUM', 'HIGH', 'URGENT'])
+  priority?: string;
 }

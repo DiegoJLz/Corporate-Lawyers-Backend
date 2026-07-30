@@ -131,6 +131,12 @@ export class PaymentService {
       if (query.dateFrom) where.paidAt.gte = new Date(query.dateFrom);
       if (query.dateTo) where.paidAt.lte = new Date(query.dateTo);
     }
+    if (query.search) {
+      where.OR = [
+        { reference: { contains: query.search, mode: 'insensitive' } },
+        { transactionId: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
 
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;

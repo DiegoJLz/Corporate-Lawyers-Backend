@@ -84,12 +84,12 @@ describe('EmailProviderService', () => {
       expect(result.provider).toBe('ses');
     });
 
-    it('should handle provider error gracefully (propagates)', async () => {
+    it('should handle provider error gracefully via circuit breaker fallback', async () => {
       mockProvider.send.mockRejectedValue(new Error('SMTP connection refused'));
 
-      await expect(service.send(basicMessage)).rejects.toThrow(
-        'SMTP connection refused',
-      );
+      const result = await service.send(basicMessage);
+      expect(result.accepted).toBe(false);
+      expect(result.provider).toBe('circuit-open');
     });
 
     it('should handle array of recipients in to field', async () => {

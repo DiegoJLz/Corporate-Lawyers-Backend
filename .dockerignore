@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.env
+.env.local
+*.md
+coverage
+.vscode
+.idea
+docker
+dev
+test
+*.spec.ts
+*.e2e-spec.ts

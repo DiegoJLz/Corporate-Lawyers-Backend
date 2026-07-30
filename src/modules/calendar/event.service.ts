@@ -161,6 +161,7 @@ export class EventService {
           createdBy: {
             select: { id: true, email: true, firstName: true, lastName: true },
           },
+          case: { select: { id: true, caseNumber: true, title: true } },
         },
         orderBy: { [sortBy]: sortOrder },
         take: limit,
@@ -404,7 +405,18 @@ export class EventService {
         startDate: { lte: new Date(dateTo) },
         endDate: { gte: new Date(dateFrom) },
       },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        startDate: true,
+        endDate: true,
+        location: true,
+        virtualUrl: true,
+        isAllDay: true,
+        caseId: true,
+        createdById: true,
+        case: { select: { caseNumber: true, title: true } },
         attendees: {
           include: {
             user: {
