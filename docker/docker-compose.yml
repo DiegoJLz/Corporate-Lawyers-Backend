@@ -7,7 +7,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.dev
     ports:
-      - '3000:3000'
+      - '8000:3000'
     environment:
       NODE_ENV: development
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/corporate_lawyers?schema=public
@@ -46,6 +46,22 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    container_name: cl-frontend
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - '5173:5173'
+    environment:
+      VITE_API_URL: http://localhost:8000/api/v1
+    volumes:
+      - ../../frontend/src:/app/src
+      - ../../frontend/index.html:/app/index.html
+    depends_on:
+      - backend
     restart: unless-stopped
 
   postgres:

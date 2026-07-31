@@ -24,7 +24,7 @@ import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { UserRole, UserStatus } from '@prisma/client';
 
 const MAX_FAILED_ATTEMPTS = 5;
-const LOCK_DURATION_MINUTES = 30;
+const LOCK_DURATION_MINUTES = 5;
 
 @Injectable()
 export class AuthService {
