@@ -159,11 +159,11 @@ export class UserService {
   async createLawyerProfile(userId: string, dto: CreateLawyerProfileDto) {
     const user = await this.findOne(userId);
 
-    if (user.role !== UserRole.LAWYER) {
-      throw new ForbiddenException('Only users with LAWYER role can have a lawyer profile');
+    if (![UserRole.LAWYER, UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(user.role as UserRole)) {
+      throw new ForbiddenException('Only users with LAWYER, ADMIN, or SUPER_ADMIN role can have a lawyer profile');
     }
 
-    return this.prisma.lawyerProfile.create({
+    const profile = await this.prisma.lawyerProfile.create({
       data: {
         userId,
         licenseNumber: dto.licenseNumber,
@@ -175,6 +175,10 @@ export class UserService {
         isPartner: dto.isPartner ?? false,
       },
     });
+
+    await this.cacheService.del(CacheKeys.USER_PROFILE(userId));
+
+    return profile;
   }
 
   async updateLawyerProfile(userId: string, dto: UpdateLawyerProfileDto) {
@@ -186,10 +190,14 @@ export class UserService {
       throw new NotFoundException('Lawyer profile not found');
     }
 
-    return this.prisma.lawyerProfile.update({
+    const updated = await this.prisma.lawyerProfile.update({
       where: { userId },
       data: dto,
     });
+
+    await this.cacheService.del(CacheKeys.USER_PROFILE(userId));
+
+    return updated;
   }
 
   // ─── Client Profile ──────────────────────────────────────────
